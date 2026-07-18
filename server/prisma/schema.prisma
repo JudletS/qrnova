@@ -3,28 +3,797 @@
 
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
+///////////////////////////////////////////////////////
+// Generator
+///////////////////////////////////////////////////////
+
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
+
+///////////////////////////////////////////////////////
+// Datasource
+///////////////////////////////////////////////////////
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
+///////////////////////////////////////////////////////
+// Organization
+///////////////////////////////////////////////////////
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MANAGER
+  EDITOR
+  MEMBER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum OrganizationType {
+  BUSINESS
+  NGO
+  SCHOOL
+  CHURCH
+  GOVERNMENT
+  COMMUNITY
+  OTHER
+}
+
+///////////////////////////////////////////////////////
+// QR Platform
+///////////////////////////////////////////////////////
+
+enum QRType {
+  URL
+  DYNAMIC_URL
+  TEXT
+  PDF
+  IMAGE
+  WIFI
+  VCARD
+  EMAIL
+  PHONE
+  SMS
+  WHATSAPP
+  LOCATION
+  EVENT
+  PAYMENT
+  APP
+  SOCIAL
+  MENU
+  COUPON
+  PRODUCT
+  CUSTOM
+}
+
+enum QRStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+  ARCHIVED
+}
+
+///////////////////////////////////////////////////////
+// Events
+///////////////////////////////////////////////////////
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum TicketStatus {
+  PENDING
+  PAID
+  CANCELLED
+  USED
+  REFUNDED
+}
+
+enum CheckInStatus {
+  SUCCESS
+  REJECTED
+}
+
+///////////////////////////////////////////////////////
+// Commerce
+///////////////////////////////////////////////////////
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  MONCASH
+  NATCASH
+  CARD
+  PAYPAL
+  STRIPE
+  CASH
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum PlanType {
+  FREE
+  STARTER
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+///////////////////////////////////////////////////////
+// Notifications
+///////////////////////////////////////////////////////
+
+enum NotificationType {
+  SYSTEM
+  PAYMENT
+  EVENT
+  TICKET
+  SECURITY
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
+///////////////////////////////////////////////////////
+// Identity
+///////////////////////////////////////////////////////
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
+  id       String @id @default(cuid())
+  email    String @unique
+  password String
+
   firstName String
   lastName  String
-  role      Role     @default(USER)
-  isActive  Boolean  @default(true)
+
+  phone  String?
+  avatar String?
+
+  isVerified Boolean @default(false)
+  isActive   Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relations
+  sessions      Session[]
+  refreshTokens RefreshToken[]
+
+  organizations Organization[] @relation("OrganizationOwner")
+
+  memberships     Membership[]
+  invitationsSent Invitation[] @relation("InvitationSender")
+
+  qrCodes QRCode[]
+
+  events Event[] @relation("UserEvents")
+
+  tickets Ticket[]
+
+  payments Payment[]
+
+  subscriptions Subscription[]
+
+  apiKeys ApiKey[]
+
+  media Media[]
+
+  notifications Notification[]
+
+  auditLogs AuditLog[]
 }
 
-enum Role {
-  USER
-  ADMIN
+model Session {
+  id String @id @default(cuid())
+
+  token String @unique
+
+  ipAddress String?
+
+  userAgent String?
+
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id String @id @default(cuid())
+
+  token String @unique
+
+  expiresAt DateTime
+
+  revoked Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+///////////////////////////////////////////////////////
+// Organization
+///////////////////////////////////////////////////////
+
+model Organization {
+  id String @id @default(cuid())
+
+  legalName String
+  tradeName String?
+
+  description String?
+
+  email   String?
+  phone   String?
+  website String?
+
+  logo String?
+
+  taxNumber String?
+
+  type OrganizationType @default(BUSINESS)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Owner
+  ownerId String
+
+  owner User @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Relations
+  memberships Membership[]
+
+  invitations Invitation[]
+
+  events Event[]
+
+  qrCodes QRCode[]
+
+  payments Payment[]
+
+  subscriptions Subscription[]
+
+  media Media[]
+
+  @@index([ownerId])
+}
+
+model Membership {
+  id String @id @default(cuid())
+
+  role MembershipRole @default(MEMBER)
+
+  status MembershipStatus @default(ACTIVE)
+
+  joinedAt DateTime @default(now())
+
+  userId         String
+  organizationId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Invitation {
+  id String @id @default(cuid())
+
+  email String
+
+  token String @unique
+
+  accepted Boolean @default(false)
+
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  organizationId String
+
+  invitedById String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  invitedBy User @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([invitedById])
+}
+
+///////////////////////////////////////////////////////
+// Events
+///////////////////////////////////////////////////////
+
+model Category {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[]
+
+  @@unique([name])
+}
+
+model Event {
+  id String @id @default(cuid())
+
+  title       String
+  slug        String  @unique
+  description String?
+
+  location String?
+
+  startsAt DateTime
+  endsAt   DateTime?
+
+  capacity Int?
+
+  coverImage String?
+
+  status EventStatus @default(DRAFT)
+
+  isPublic Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownerId        String
+  organizationId String?
+  categoryId     String?
+
+  owner User @relation("UserEvents", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  ticketTypes TicketType[]
+
+  tickets Ticket[]
+
+  checkIns CheckIn[]
+
+  qrCodes QRCode[]
+
+  media Media[]
+
+  @@index([ownerId])
+  @@index([organizationId])
+  @@index([categoryId])
+}
+
+model TicketType {
+  id String @id @default(cuid())
+
+  name String
+
+  description String?
+
+  price Decimal @db.Decimal(10, 2)
+
+  quantity Int
+
+  maxPerOrder Int?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  eventId String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  tickets Ticket[]
+
+  @@index([eventId])
+}
+
+///////////////////////////////////////////////////////
+// Ticketing
+///////////////////////////////////////////////////////
+
+model Attendee {
+  id String @id @default(cuid())
+
+  firstName String
+  lastName  String
+  email     String
+  phone     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets  Ticket[]
+  checkIns CheckIn[]
+}
+
+model Ticket {
+  id String @id @default(cuid())
+
+  code String @unique
+
+  status TicketStatus @default(PENDING)
+
+  purchasedAt DateTime @default(now())
+
+  eventId      String
+  ticketTypeId String
+  attendeeId   String
+  buyerId      String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+  attendee Attendee @relation(fields: [attendeeId], references: [id], onDelete: Cascade)
+
+  buyer User @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  checkIns CheckIn[]
+
+  payment Payment?
+
+  qrCode QRCode?
+
+  @@index([eventId])
+  @@index([ticketTypeId])
+  @@index([attendeeId])
+  @@index([buyerId])
+}
+
+model CheckIn {
+  id String @id @default(cuid())
+
+  checkedAt DateTime @default(now())
+
+  status CheckInStatus @default(SUCCESS)
+
+  notes String?
+
+  eventId    String
+  ticketId   String
+  attendeeId String
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  attendee Attendee @relation(fields: [attendeeId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([ticketId])
+  @@index([attendeeId])
+}
+
+///////////////////////////////////////////////////////
+// QR Code System
+///////////////////////////////////////////////////////
+
+model QRCode {
+  id String @id @default(cuid())
+
+  code String @unique
+
+  type QRType
+
+  status QRStatus @default(ACTIVE)
+
+  destination String?
+
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  userId String?
+
+  organizationId String?
+  eventId        String?
+  ticketId       String? @unique
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  redirect QRRedirect?
+
+  scans QRScan[]
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([eventId])
+}
+
+model QRRedirect {
+  id String @id @default(cuid())
+
+  targetUrl String
+
+  createdAt DateTime @default(now())
+
+  qrCodeId String @unique
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+}
+
+model QRScan {
+  id String @id @default(cuid())
+
+  scannedAt DateTime @default(now())
+
+  ipAddress String?
+
+  userAgent String?
+
+  latitude  Float?
+  longitude Float?
+
+  qrCodeId String
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  @@index([qrCodeId])
+}
+
+///////////////////////////////////////////////////////
+// Commerce
+///////////////////////////////////////////////////////
+
+model Plan {
+  id String @id @default(cuid())
+
+  name String @unique
+
+  description String?
+
+  type PlanType
+
+  price Decimal @db.Decimal(10, 2)
+
+  currency String @default("USD")
+
+  durationDays Int
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id String @id @default(cuid())
+
+  status SubscriptionStatus @default(ACTIVE)
+
+  startsAt DateTime
+
+  endsAt DateTime
+
+  autoRenew Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId         String?
+  organizationId String?
+  planId         String
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  payments Payment[]
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([planId])
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  reference String @unique
+
+  amount Decimal @db.Decimal(10, 2)
+
+  currency String @default("USD")
+
+  method PaymentMethod
+
+  status PaymentStatus @default(PENDING)
+
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String?
+
+  organizationId String?
+
+  ticketId String? @unique
+
+  subscriptionId String?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([subscriptionId])
+}
+
+///////////////////////////////////////////////////////
+// Platform
+///////////////////////////////////////////////////////
+
+model ApiKey {
+  id String @id @default(cuid())
+
+  name String
+
+  key String @unique
+
+  isActive Boolean @default(true)
+
+  lastUsedAt DateTime?
+
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Media {
+  id String @id @default(cuid())
+
+  fileName String
+
+  originalName String
+
+  mimeType String
+
+  url String
+
+  size Int
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  userId String?
+
+  organizationId String?
+
+  eventId String?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([eventId])
+}
+
+model Notification {
+  id String @id @default(cuid())
+
+  title String
+
+  message String
+
+  type NotificationType
+
+  status NotificationStatus @default(UNREAD)
+
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  action String
+
+  entity String
+
+  entityId String?
+
+  metadata Json?
+
+  ipAddress String?
+
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
 }
