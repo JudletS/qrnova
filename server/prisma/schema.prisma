@@ -234,15 +234,26 @@ model RefreshToken {
 
   token String @unique
 
+  userId String
+  user User @relation(fields:[userId], references:[id], onDelete: Cascade)
+
   expiresAt DateTime
 
   revoked Boolean @default(false)
 
+  revokedAt DateTime?
+
+  replacedByToken String?
+
+  createdByIp String?
+
+  revokedByIp String?
+
+  userAgent String?
+
+  deviceName String?
+
   createdAt DateTime @default(now())
-
-  userId String
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }

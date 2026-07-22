@@ -8,10 +8,12 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import type { StringValue } from 'ms';
+import { RefreshTokensModule } from '../refresh-tokens/refresh-tokens.module';
 
 @Module({
   imports: [
     UsersModule,
+    RefreshTokensModule,
     ConfigModule,
 
     PassportModule.register({

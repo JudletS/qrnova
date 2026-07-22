@@ -9,12 +9,14 @@ import * as argon2 from 'argon2';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokensService } from '../refresh-tokens/refresh-tokens.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly refreshTokensService: RefreshTokensService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -75,9 +77,23 @@ export class AuthService {
       user.email,
     );
 
+    const refreshToken = await this.generateRefreshToken(
+      user.id,
+      user.email,
+    );
+    const expiresAt = new Date();
+expiresAt.setDate(expiresAt.getDate() + 7);
+
+await this.refreshTokensService.create(
+  user.id,
+  refreshToken,
+  expiresAt,
+);
+
     return {
       message: 'Login successful',
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         firstName: user.firstName,
@@ -95,5 +111,19 @@ export class AuthService {
       sub: userId,
       email,
     });
+  }
+  private async generateRefreshToken(
+    userId: string,
+    email: string,
+  ): Promise<string> {
+    return this.jwtService.signAsync(
+      {
+        sub: userId,
+        email,
+      },
+      {
+        expiresIn: '7d',
+      },
+    );
   }
 }
